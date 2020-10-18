@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Последние обновления на сайте{% endblock %}
+{% block header %}Последние обновления на сайте{% endblock %}
+{% load thumbnail %}
+
+{% block content %}
+    {% include "included_snippet/menu.html" with index=True %}
+    <div class="container">
+        {% for post in page %}
+            {% include "included_snippet/post_item.html" with post=post %}
+        {% endfor %}
+    </div>
+        {% if page.has_other_pages %}
+            {% include "skeleton_page/paginator.html" with items=page paginator=paginator %}
+        {% endif %}
+{% endblock %}
