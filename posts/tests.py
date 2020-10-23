@@ -2,6 +2,7 @@ import time
 
 from django.core.cache import cache
 from django.core.cache.utils import make_template_fragment_key
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.shortcuts import get_object_or_404
 from django.test import TestCase, Client
 from django.urls import reverse
@@ -36,7 +37,7 @@ class TestPosts(TestCase):
         response = self.client.post(reverse('new_post'), data={'text': text, 'group': self.group.id}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Post.objects.count(), 1)
-        post = get_object_or_404(Post, author__username=self.user.username)
+        post = Post.objects.first()
         self.assertEqual(post.text, text)
         self.assertEqual(post.author, self.user)
         self.assertEqual(post.group, self.group)
@@ -80,7 +81,7 @@ class TestPosts(TestCase):
                                      data={'text': edit_text, 'group': new_group.id},
                                      follow=True)
         old_group = self.client.get(reverse('group', kwargs={'slug': self.group.slug}))
-        self.assertEqual(len(old_group.context['page']), 0)
+        self.assertEqual(old_group.context['paginator'].count, 0)
         for url in urls:
             self.check_content(url, self.user, new_group, edit_text)
 
@@ -95,16 +96,21 @@ class TestPosts(TestCase):
         self.assertEqual(post.author, user)
         self.assertEqual(post.group.id, group.id)
 
-    def test_comment_post(self):
+    def test_comment_post_auth(self):
         text = 'TextTest'
         post = Post.objects.create(text=text, author=self.user)
         self.client.post(reverse('add_comment', kwargs={'username': self.user.username, 'post_id': post.id}), data={'post': post, 'text': text, 'author': self.user}, follow=True)
-        response = self.client.get(reverse('post', kwargs={'username': self.user.username, 'post_id': post.id}))
-        self.assertEqual(len(response.context['comments']), 1)
+        comment = Comment.objects.first()
+        self.assertTrue(Comment.objects.exists())
+        self.assertEqual(comment.text, text)
+        self.assertEqual(comment.author, self.user)
+
+    def test_comment_post_not_auth(self):
         self.client.logout()
+        text = 'TextTest'
+        post = Post.objects.create(text=text, author=self.user)
         self.client.post(reverse('add_comment', kwargs={'username': self.user.username, 'post_id': post.id}), data={'post': post, 'text': text, 'author': self.user}, follow=True)
-        response = self.client.get(reverse('post', kwargs={'username': self.user.username, 'post_id': post.id}))
-        self.assertEqual(len(response.context['comments']), 1)
+        self.assertFalse(Comment.objects.exists())
 
 
 class TestImage(TestCase):
@@ -125,16 +131,17 @@ class TestImage(TestCase):
             group=self.group
         )
         self.client.force_login(self.user)
+        self.image = SimpleUploadedFile(name='test_image.jpg', content=open('media/posts/test_image.jpg', 'rb').read(), content_type='image/jpeg')
+        self.file = SimpleUploadedFile('file.txt', b'', 'text/plain')
 
     def test_image(self):
-        with open('media/posts/cartman.jpg', 'rb') as img:
-            response = self.client.post(reverse('post_edit', kwargs={'username': self.user.username, 'post_id': self.post.id}),
-                                        {
-                                            'text': 'post with image',
-                                            'image': img,
-                                            'group': self.group.id
-                                        }
-                                        )
+        self.client.post(reverse('post_edit', kwargs={'username': self.user.username, 'post_id': self.post.id}),
+                                    {
+                                        'text': 'post with image',
+                                        'image': self.image,
+                                        'group': self.group.id
+                                    }
+                                    )
         urls = (
             reverse('index'),
             reverse('post', kwargs={'username': self.user.username, 'post_id': self.post.id}),
@@ -143,19 +150,18 @@ class TestImage(TestCase):
         )
         for url in urls:
             response = self.client.get(url)
-            self.assertContains(response, '<img'.encode())
+            self.assertContains(response, '<img')
 
     def test_not_image(self):
-        with open('media/posts/test.txt', 'rb') as img:
-            post = self.client.post(reverse('post_edit', kwargs={'username': self.user.username, 'post_id': self.post.id}),
-                                        {
-                                            'text': 'post with image',
-                                            'image': img,
-                                            'group': self.group.id
-                                        }
-                                        )
-            response = self.client.get(reverse('index'))
-            self.assertNotContains(response, '<img'.encode())
+        self.client.post(reverse('post_edit', kwargs={'username': self.user.username, 'post_id': self.post.id}),
+                                    {
+                                        'text': 'post with image',
+                                        'image': self.file,
+                                        'group': self.group.id
+                                    }
+                                    )
+        response = self.client.get(reverse('index'))
+        self.assertNotContains(response, '<img')
 
 
 class TestCache(TestCase):
@@ -202,10 +208,15 @@ class TestFollow(TestCase):
             password='Test12345',
             email='test@test.com',
         )
+        self.group = Group.objects.create(
+            title='TestTitle',
+            slug='TestSlug',
+            description='TestDescription'
+        )
         self.new_client = Client()
         self.new_client2 = Client()
-        self.post = Post.objects.create(author=self.user, text='TestText')
-        self.second_post = Post.objects.create(author=self.second_user, text='Text')
+        self.post = Post.objects.create(author=self.user, text='TestText', group=self.group)
+        self.second_post = Post.objects.create(author=self.second_user, text='Text', group=self.group)
         self.myself_user = User.objects.create_user(
             username='MySelfUser',
             password='Test12345',
@@ -213,14 +224,30 @@ class TestFollow(TestCase):
         )
         self.client.force_login(self.myself_user)
 
-    def test_follow_and_unfollow(self):
-        self.client.get(reverse('profile_follow', kwargs={'username': self.user.username}))
+    def test_follow(self):
+        Follow.objects.create(author=self.user, user=self.myself_user)
+        follow = Follow.objects.first()
+        self.assertTrue(Follow.objects.exists())
         self.assertEqual(Follow.objects.count(), 1)
+        self.assertEqual(follow.author, self.user)
+        self.assertEqual(follow.user, self.myself_user)
+
+    def test_unfollow(self):
+        Follow.objects.create(author=self.user, user=self.myself_user)
         self.client.get(reverse('profile_unfollow', kwargs={'username': self.user.username}))
-        self.assertEqual(Follow.objects.count(), 0)
+        self.assertFalse(Follow.objects.exists())
     
     def test_follow_index(self):
-        self.client.get(reverse('profile_follow', kwargs={'username': self.user.username}))
+        Follow.objects.create(author=self.user, user=self.myself_user)
         response = self.client.get(reverse('follow_index'))
-        self.assertEqual(response.context['post'], self.post)
-        self.assertNotEqual(response.context['post'], self.second_post)
+        post = response.context['post']
+        self.assertEqual(post.text, 'TestText')
+        self.assertEqual(post.author, self.user)
+        self.assertEqual(post.group.id, self.group.id)
+
+    def test_unfollow_index(self):
+        Follow.objects.create(author=self.user, user=self.myself_user)
+        response = self.client.get(reverse('follow_index'))
+        post = response.context['post']
+        self.assertNotEqual(post.text, 'Text')
+        self.assertNotEqual(post.author, self.second_user)
