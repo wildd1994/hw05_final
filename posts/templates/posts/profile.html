@@ -6,7 +6,7 @@
 {% block content %}
 <main role="main" class="container">
     <div class="row">
-        {% include "included_snippet/author_card.html" with author=author post_count=post_count %}
+        {% include "included_snippet/author_card.html" with author=author %}
         <div class="col-md-9">
             {% for post in page %}
             <!-- Начало блока с отдельным постом -->
