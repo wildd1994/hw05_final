@@ -33,13 +33,12 @@ urlpatterns = [
     path("auth/", include("django.contrib.auth.urls")),
     # импорт из приложения posts
     path("", include('posts.urls')),
-]
-urlpatterns += [
     path('about-us/', views.flatpage, {'url': '/about-us/'}, name='about'),
     path('terms/', views.flatpage, {'url': '/terms/'}, name='terms'),
     path('about-spec/', views.flatpage, {'url': '/about-spec/'}, name='about_spec'),
     path('about-author/', views.flatpage, {'url': '/about-author/'}, name='about_author'),
 ]
+
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
