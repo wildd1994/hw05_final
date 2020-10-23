@@ -63,13 +63,8 @@ def profile(request, username):
     paginator = Paginator(posts, 6)
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
-    following = False
-    if request.user.is_authenticated:
-        favorites = Follow.objects.filter(user=request.user).count()
-        if favorites > 0:
-            following = True
-    user_followers = Follow.objects.filter(author=author).count()
-    user_follow = Follow.objects.filter(user=author).count()
+    following = request.user.is_authenticated and (
+            Follow.objects.filter(user=request.user, author=author).exists())
     return render(
         request,
         'posts/profile.html',
@@ -78,8 +73,7 @@ def profile(request, username):
             'page': page,
             'paginator': paginator,
             'following': following,
-            'user_followers': user_followers,
-            'user_follow': user_follow,
+            'profile': True,
         }
         )
 
@@ -146,8 +140,8 @@ def add_comment(request, username, post_id):
 def follow_index(request):
     # информация о текущем пользователе доступна в переменной request.user
     # return render(request, "follow.html", {...})
-    authors = Follow.objects.filter(user=request.user).values('author')
-    post_list = Post.objects.filter(author__in=authors)
+    #authors = Follow.objects.filter(user=request.user).values('author')
+    post_list = Post.objects.filter(author__following__user=request.user)
     paginator = Paginator(post_list, 10)
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
@@ -163,25 +157,22 @@ def follow_index(request):
 
 @login_required
 def profile_follow(request, username):
-    if request.user != username:
-        follower = request.user
-        following = get_object_or_404(User, username=username)
-        follow = Follow.objects.filter(user=follower, author=following).count()
-        if follow == 0 and follower != following:
-            Follow.objects.create(user=follower, author=following)
-        return redirect('profile', username=username)
+    follower = request.user
+    following = get_object_or_404(User, username=username)
+    follow = Follow.objects.filter(user=follower, author=following).exists()
+    if not follow and follower != following:
+        Follow.objects.create(user=follower, author=following)
+    return redirect('profile', username=username)
 
 
 @login_required
 def profile_unfollow(request, username):
-    if request.user != username:
-        follower = request.user
-        following = get_object_or_404(User, username=username)
-        follow = Follow.objects.filter(user=follower, author=following).count()
-        if follow != 0:
-            unfollow = Follow.objects.filter(user=follower, author=following)
-            unfollow.delete()
-        return redirect('profile', username=username)
+    follower = request.user
+    following = get_object_or_404(User, username=username)
+    follow = Follow.objects.filter(user=follower, author=following)
+    if follow.exists() and follower != following:
+        follow.delete()
+    return redirect('profile', username=username)
 
 
 def page_not_found(request, exception):
