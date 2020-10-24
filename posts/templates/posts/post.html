@@ -12,7 +12,7 @@
         <div class="col-md-9">
             <!-- Пост -->
             {% include "included_snippet/post_item.html" with post=selected_post %}
-            {% include "included_snippet/comments.html" with get_post=selected_post form=form %}
+            {% include "included_snippet/comments.html" with get_post=selected_post form=form comments=selected_post.comments.all%}
         </div>
     </div>
 {% endblock %}

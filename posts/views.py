@@ -81,7 +81,6 @@ def profile(request, username):
 def post_view(request, username, post_id):
     selected_post = get_object_or_404(Post, pk=post_id, author__username=username)
     author = selected_post.author
-    comments = Comment.objects.filter(post=selected_post).all()
     form = CommentForm()
     return render(
         request,
@@ -90,7 +89,6 @@ def post_view(request, username, post_id):
             'author': author,
             'selected_post': selected_post,
             'form': form,
-            'comments': comments,
          }
     )
 
