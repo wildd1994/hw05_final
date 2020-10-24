@@ -7,12 +7,12 @@
 
 <main role="main" class="container">
     <div class="row">
-        {% include "included_snippet/author_card.html" with author=author post_count=post_count%}
+        {% include "included_snippet/author_card.html" with author=author%}
 
         <div class="col-md-9">
             <!-- Пост -->
             {% include "included_snippet/post_item.html" with post=selected_post %}
-            {% include "included_snippet/comments.html" with get_post=selected_post form=form item=comments %}
+            {% include "included_snippet/comments.html" with get_post=selected_post form=form %}
         </div>
     </div>
 {% endblock %}

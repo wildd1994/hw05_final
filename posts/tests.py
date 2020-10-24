@@ -1,12 +1,8 @@
-import time
 
 from django.core.cache import cache
-from django.core.cache.utils import make_template_fragment_key
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.shortcuts import get_object_or_404
 from django.test import TestCase, Client
 from django.urls import reverse
-from django.utils.cache import get_cache_key
 
 from posts.models import User, Post, Group, Comment, Follow
 
@@ -52,6 +48,7 @@ class TestPosts(TestCase):
         self.assertEqual(Post.objects.count(), 0)
 
     def test_new_post_location(self):
+        cache.clear()
         text = 'TextTest'
         post = Post.objects.create(text=text, author=self.user, group=self.group)
         urls = (
@@ -63,6 +60,7 @@ class TestPosts(TestCase):
             self.check_content(url, self.user, self.group, text)
 
     def test_edit_post(self):
+        cache.clear()
         text = 'TextTest'
         edit_text = 'TestText'
         post = Post.objects.create(text=text, author=self.user, group=self.group)
@@ -101,15 +99,14 @@ class TestPosts(TestCase):
         post = Post.objects.create(text=text, author=self.user)
         self.client.post(reverse('add_comment', kwargs={'username': self.user.username, 'post_id': post.id}), data={'post': post, 'text': text, 'author': self.user}, follow=True)
         comment = Comment.objects.first()
-        self.assertTrue(Comment.objects.exists())
+        self.assertEqual(Comment.objects.count(), 1)
         self.assertEqual(comment.text, text)
         self.assertEqual(comment.author, self.user)
 
     def test_comment_post_not_auth(self):
-        self.client.logout()
         text = 'TextTest'
         post = Post.objects.create(text=text, author=self.user)
-        self.client.post(reverse('add_comment', kwargs={'username': self.user.username, 'post_id': post.id}), data={'post': post, 'text': text, 'author': self.user}, follow=True)
+        self.client.post(reverse('add_comment', kwargs={'username': self.unauth_client, 'post_id': post.id}), data={'post': post, 'text': text, 'author': self.user}, follow=True)
         self.assertFalse(Comment.objects.exists())
 
 
@@ -131,10 +128,14 @@ class TestImage(TestCase):
             group=self.group
         )
         self.client.force_login(self.user)
-        self.image = SimpleUploadedFile(name='test_image.jpg', content=open('media/posts/test_image.jpg', 'rb').read(), content_type='image/jpeg')
-        self.file = SimpleUploadedFile('file.txt', b'', 'text/plain')
+        image = (b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x00\x00\x00\x21'
+                 b'\xf9\x04\x01\x0a\x00\x01\x00\x2c\x00\x00\x00\x00\x01\x00'
+                 b'\x01\x00\x00\x02\x02\x4c\x01\x00\x3b')
+        self.image = SimpleUploadedFile(name='test_image.jpg', content=image, content_type='image/jpg')
+        self.file = SimpleUploadedFile('file.txt', b'Hello', 'text/plain')
 
     def test_image(self):
+        cache.clear()
         self.client.post(reverse('post_edit', kwargs={'username': self.user.username, 'post_id': self.post.id}),
                                     {
                                         'text': 'post with image',
@@ -153,15 +154,14 @@ class TestImage(TestCase):
             self.assertContains(response, '<img')
 
     def test_not_image(self):
-        self.client.post(reverse('post_edit', kwargs={'username': self.user.username, 'post_id': self.post.id}),
+        response = self.client.post(reverse('post_edit', kwargs={'username': self.user.username, 'post_id': self.post.id}),
                                     {
                                         'text': 'post with image',
                                         'image': self.file,
                                         'group': self.group.id
                                     }
                                     )
-        response = self.client.get(reverse('index'))
-        self.assertNotContains(response, '<img')
+        self.assertFormError(response, 'form', 'image', 'Upload a valid image. The file you uploaded was either not an image or a corrupted image.')
 
 
 class TestCache(TestCase):
@@ -176,18 +176,12 @@ class TestCache(TestCase):
             slug='TestSlug',
             description='TestDescription'
         )
-        self.post = Post.objects.create(
-            author=self.user,
-            text='TestText',
-            group=self.group
-        )
         self.client.force_login(self.user)
 
     def test_cache(self):
         text = 'TestCache'
-        response = self.client.get(reverse('index'))
-        self.assertNotEqual(response.context, None)
-        self.post = Post.objects.create(author=self.user, text=text)
+        self.client.get(reverse('index'))
+        Post.objects.create(author=self.user, text=text, group=self.group)
         response = self.client.get(reverse('index'))
         self.assertEqual(response.context, None)
         cache.clear()
@@ -203,20 +197,13 @@ class TestFollow(TestCase):
             password='Test12345',
             email='test@test.com'
         )
-        self.second_user = User.objects.create_user(
-            username='TestUser2',
-            password='Test12345',
-            email='test@test.com',
-        )
         self.group = Group.objects.create(
             title='TestTitle',
             slug='TestSlug',
             description='TestDescription'
         )
-        self.new_client = Client()
-        self.new_client2 = Client()
+        self.client = Client()
         self.post = Post.objects.create(author=self.user, text='TestText', group=self.group)
-        self.second_post = Post.objects.create(author=self.second_user, text='Text', group=self.group)
         self.myself_user = User.objects.create_user(
             username='MySelfUser',
             password='Test12345',
@@ -225,20 +212,19 @@ class TestFollow(TestCase):
         self.client.force_login(self.myself_user)
 
     def test_follow(self):
-        Follow.objects.create(author=self.user, user=self.myself_user)
+        self.client.get(reverse('profile_follow', kwargs={'username': self.user.username}))
         follow = Follow.objects.first()
-        self.assertTrue(Follow.objects.exists())
         self.assertEqual(Follow.objects.count(), 1)
         self.assertEqual(follow.author, self.user)
         self.assertEqual(follow.user, self.myself_user)
 
     def test_unfollow(self):
-        Follow.objects.create(author=self.user, user=self.myself_user)
+        self.client.get(reverse('profile_follow', kwargs={'username': self.user.username}))
         self.client.get(reverse('profile_unfollow', kwargs={'username': self.user.username}))
         self.assertFalse(Follow.objects.exists())
     
     def test_follow_index(self):
-        Follow.objects.create(author=self.user, user=self.myself_user)
+        self.client.get(reverse('profile_follow', kwargs={'username': self.user.username}))
         response = self.client.get(reverse('follow_index'))
         post = response.context['post']
         self.assertEqual(post.text, 'TestText')
@@ -246,8 +232,5 @@ class TestFollow(TestCase):
         self.assertEqual(post.group.id, self.group.id)
 
     def test_unfollow_index(self):
-        Follow.objects.create(author=self.user, user=self.myself_user)
         response = self.client.get(reverse('follow_index'))
-        post = response.context['post']
-        self.assertNotEqual(post.text, 'Text')
-        self.assertNotEqual(post.author, self.second_user)
+        self.assertEqual(response.context['paginator'].count, 0)

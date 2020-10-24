@@ -96,8 +96,6 @@ def post_view(request, username, post_id):
 
 
 def post_edit(request, username, post_id):
-    # тут тело функции. Не забудьте проверить,
-    # что текущий пользователь — это автор записи.
     get_post = get_object_or_404(Post, pk=post_id, author__username=username)
     if request.user != get_post.author:
         return redirect('post_view', username=username, post_id=post_id)
@@ -138,9 +136,6 @@ def add_comment(request, username, post_id):
 
 @login_required
 def follow_index(request):
-    # информация о текущем пользователе доступна в переменной request.user
-    # return render(request, "follow.html", {...})
-    #authors = Follow.objects.filter(user=request.user).values('author')
     post_list = Post.objects.filter(author__following__user=request.user)
     paginator = Paginator(post_list, 10)
     page_number = request.GET.get('page')
@@ -176,8 +171,6 @@ def profile_unfollow(request, username):
 
 
 def page_not_found(request, exception):
-    # Переменная exception содержит отладочную информацию,
-    # выводить её в шаблон пользователской страницы 404 мы не станем
     return render(
         request,
         "misc/404.html",
