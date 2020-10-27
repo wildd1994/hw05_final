@@ -1,7 +1,6 @@
-
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, Client, override_settings
+from django.test import TestCase, Client
 from django.urls import reverse
 
 from posts.models import User, Post, Group, Comment, Follow
@@ -25,12 +24,16 @@ class TestPosts(TestCase):
 
     def test_create_profile(self):
         user = self.user
-        response = self.client.get(reverse('profile', kwargs={'username': user.username}))
+        response = self.client.get(reverse('profile',
+                                           kwargs={'username': user.username})
+                                   )
         self.assertEqual(response.status_code, 200)
 
     def test_posted_new_post(self):
         text = 'TextTest'
-        response = self.client.post(reverse('new_post'), data={'text': text, 'group': self.group.id}, follow=True)
+        response = self.client.post(reverse('new_post'),
+                                    data={'text': text, 'group': self.group.id},
+                                    follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Post.objects.count(), 1)
         post = Post.objects.first()
@@ -44,7 +47,9 @@ class TestPosts(TestCase):
         login_url = reverse('login')
         new_post_url = reverse('new_post')
         url = f'{login_url}?next={new_post_url}'
-        response = self.un_auth_client.post(new_post_url, data={'text': text}, follow=True)
+        response = self.un_auth_client.post(new_post_url,
+                                            data={'text': text},
+                                            follow=True)
         self.assertRedirects(response, url)
         self.assertEqual(Post.objects.count(), 0)
 
@@ -74,7 +79,8 @@ class TestPosts(TestCase):
             reverse('post', kwargs={'username': self.user.username, 'post_id': post.id}),
             reverse('group', kwargs={'slug': new_group.slug})
         )
-        self.client.post(reverse('post_edit', kwargs={'username': self.user.username, 'post_id': post.id}),
+        self.client.post(reverse('post_edit',
+                                 kwargs={'username': self.user.username, 'post_id': post.id}),
                          data={'text': edit_text, 'group': new_group.id},
                          follow=True)
         old_group = self.client.get(reverse('group', kwargs={'slug': self.group.slug}))
@@ -95,22 +101,35 @@ class TestPosts(TestCase):
 
     def test_comment_post_auth(self):
         text = 'TextTest'
-        post = Post.objects.create(text=text, author=self.user)
-        self.client.post(reverse('add_comment', kwargs={'username': self.user.username, 'post_id': post.id}),
-                         data={'post': post, 'text': text, 'author': self.user}, follow=True)
+        post = Post.objects.create(text=text,
+                                   author=self.user)
+        self.client.post(reverse('add_comment',
+                                 kwargs={'username': self.user.username,
+                                         'post_id': post.id}),
+                         data={'post': post,
+                               'text': text,
+                               'author': self.user},
+                         follow=True
+                         )
         comment = Comment.objects.first()
         self.assertEqual(Comment.objects.count(), 1)
         self.assertEqual(comment.text, text)
         self.assertEqual(comment.author, self.user)
 
     def test_comment_post_not_auth(self):
-        self.un_auth_client = Client()
+        un_auth_client = Client()
         text = 'TextTest'
         post = Post.objects.create(text=text, author=self.user)
-        response = self.un_auth_client.post(reverse('add_comment', kwargs={'username': self.user, 'post_id': post.id}),
-                                            data={'post': post, 'text': text, 'author': self.user}, follow=True)
+        response = un_auth_client.post(reverse('add_comment',
+                                               kwargs={'username': self.user,
+                                                       'post_id': post.id}),
+                                       data={'post': post,
+                                             'text': text,
+                                             'author': self.user},
+                                       follow=True)
         login_url = reverse('login')
-        comment_post_url = reverse('add_comment', kwargs={'username': self.user, 'post_id': post.id})
+        comment_post_url = reverse('add_comment',
+                                   kwargs={'username': self.user, 'post_id': post.id})
         url = f'{login_url}?next={comment_post_url}'
         self.assertRedirects(response, url)
         self.assertFalse(Comment.objects.exists())
@@ -135,8 +154,13 @@ class TestImage(TestCase):
         content_image = (b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x00\x00\x00\x21'
                          b'\xf9\x04\x01\x0a\x00\x01\x00\x2c\x00\x00\x00\x00\x01\x00'
                          b'\x01\x00\x00\x02\x02\x4c\x01\x00\x3b')
-        image = SimpleUploadedFile(name='test_image.jpg', content=content_image, content_type='image/jpg')
-        post = Post.objects.create(author=self.user, text='TestText', group=self.group, image=image)
+        image = SimpleUploadedFile(name='test_image.jpg',
+                                   content=content_image,
+                                   content_type='image/jpg')
+        post = Post.objects.create(author=self.user,
+                                   text='TestText',
+                                   group=self.group,
+                                   image=image)
         urls = (
             reverse('index'),
             reverse('post', kwargs={'username': self.user.username, 'post_id': post.id}),
@@ -158,7 +182,8 @@ class TestImage(TestCase):
                                     },
                                     follow=True)
         self.assertFormError(response, 'form', 'image',
-                             'Upload a valid image. The file you uploaded was either not an image or a corrupted image.'
+                             'Upload a valid image. The file you uploaded was either'
+                             ' not an image or a corrupted image.'
                              )
 
 
@@ -219,7 +244,7 @@ class TestFollow(TestCase):
         self.client.get(reverse('profile_follow', kwargs={'username': self.user.username}))
         self.client.get(reverse('profile_unfollow', kwargs={'username': self.user.username}))
         self.assertFalse(Follow.objects.exists())
-    
+
     def test_follow_index(self):
         Post.objects.create(author=self.user, text='TestText', group=self.group)
         self.client.get(reverse('profile_follow', kwargs={'username': self.user.username}))
