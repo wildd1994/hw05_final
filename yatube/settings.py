@@ -12,8 +12,10 @@ https://docs.djangoproject.com/en/2.2/ref/settings/
 
 import os
 import environ
-import sentry_sdk
-from sentry_sdk.integrations.django import DjangoIntegration
+env = environ.Env()
+environ.Env.read_env()
+# import sentry_sdk
+# from sentry_sdk.integrations.django import DjangoIntegration
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,10 +25,10 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # See https://docs.djangoproject.com/en/2.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'mimpcdn^qta2yq58omx+z*@q5zep%-_$(hp*xrf0hy))#ozb87'
+SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = env('DEBUG')
 
 ALLOWED_HOSTS = [
     '*',
@@ -39,14 +41,13 @@ ALLOWED_HOSTS = [
 
 # Application definition
 
-env = environ.Env()
-environ.Env.read_env()
 
-
-sentry_sdk.init(
-    dsn='https://df81c6c19aa847638b94af96b01d47f6@o530908.ingest.sentry.io/5650896',
-    integrations=[DjangoIntegration()],
-)
+#
+#
+# sentry_sdk.init(
+#     dsn='https://df81c6c19aa847638b94af96b01d47f6@o530908.ingest.sentry.io/5650896',
+#     integrations=[DjangoIntegration()],
+# )
 
 INSTALLED_APPS = [
     'users',
@@ -96,10 +97,15 @@ WSGI_APPLICATION = 'yatube.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/2.2/ref/settings/#databases
-
 DATABASES = {
-    'default': env.db(),
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+    }
 }
+# DATABASES = {
+#     'default': env.db(),
+# }
 
 
 # Password validation
