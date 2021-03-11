@@ -12,7 +12,7 @@
 
 * Запуск:
   * Установка зависимостей:
-    * `<pip install -r requirements.txt>`
+    * `pip install -r requirements.txt`
   * Применение миграций:
     * python manage.py makemigrations
     * python manage.py migrate
